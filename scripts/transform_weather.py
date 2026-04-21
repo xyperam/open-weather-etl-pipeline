@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,16 +16,34 @@ DB_URI = f'postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 def transform_bronze_to_silver():
     engine = create_engine(DB_URI)
     
+    
     print ("Reading data from bronze layer")
+    #watermark data terakhir di silver
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT MAX(observation_time) FROM silver_weather"))
+            last_watermark = result.scalar()
+    except Exception:
+        last_watermark =None    
+    print(f"last watermark : {last_watermark}")
+    
+    # tarik data dari bronze yang baru
+    if last_watermark:
     #Extract 
-    query_extract ="SELECT city,temp_celsius,humidity,weather_desc,dt FROM raw_weather"
-    df_raw = pd.read_sql(query_extract, engine)
+        query_extract ="""
+            SELECT city,temp_celsius,humidity,weather_desc,dt FROM raw_weather
+            WHERE TO_TIMESTAMP(dt) AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta' > :wm
+            """
+        df_raw = pd.read_sql(text(query_extract), engine,params={'wm': last_watermark})
+    else : 
+        df_raw = pd.read_sql("SELECT city,temp_celsius,humidity,weather_desc,dt FROM raw_weather",engine)
+        df_raw = pd.read_sql_query(query_extract,engine)
     
     if df_raw.empty:
         print("No data found in bronze")
         return
     
-    print("Transforming data")
+    print("Transforming {len(df_raw)} data")
     
     #Konversi unix timestamp ke Date Time (WIB)
     
