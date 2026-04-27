@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 import sys
@@ -17,16 +18,22 @@ def run_script(script_path):
         return False
     
 def main():
-    start_time = time.time()
-    print("Start weather data pipeline")
+    interval = int(os.getenv('PIPELINE_INTERVAL',300))
     
-    if run_script("scripts/ingest_weather.py"):
+    print(f"=== WEATHER DATA PIPELANE STARTED (Interval:{interval}s)===")
+    
+    while True:
+        start_time = time.time()
+        print("Start weather data pipeline")
+    
+        if run_script("scripts/ingest_weather.py"):
         #jalanin script ingest
-        run_script("scripts/transform_weather.py")
+            run_script("scripts/transform_weather.py")
     
-    end_time = time.time()
-    duration = round(end_time - start_time,2)
-    print(f"pipeline finished in {duration} seconds")
-    
+        end_time = time.time()
+        duration = round(end_time - start_time,2)
+        print(f"pipeline finished in {duration} seconds")
+        print(f"Next run in {interval//60} minutes")
+        time.sleep(interval)
 if __name__ == "__main__":
     main()
